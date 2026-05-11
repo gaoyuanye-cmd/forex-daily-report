@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
-import pandas_ta as ta
+
 
 # ========== 配置部分 ==========
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")

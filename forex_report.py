@@ -10,30 +10,40 @@ from typing import Dict, Any
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
-# ========== 使用免费 API 获取 EUR/USD 汇率 ==========
+# ========== 使用更稳定的免费 API 获取 EUR/USD ==========
 def fetch_eurusd() -> Dict[str, Any]:
-    """从 exchangerate.host 获取 EUR/USD 实时汇率"""
-    try:
-        # 免费接口，无需 Key
-        url = "https://api.exchangerate.host/latest?base=EUR&symbols=USD"
-        resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            rate = data["rates"]["USD"]
-            return {
-                "current_price": round(rate, 4),
-                "change_pct": 0.0,  # 该 API 不提供日内涨跌，可以忽略或估算
-                "error": None
-            }
-        else:
-            return {"error": f"API 返回 {resp.status_code}"}
-    except Exception as e:
-        return {"error": str(e)}
+    """尝试多个免费 API 获取 EUR/USD 汇率，返回当前价格"""
+    apis = [
+        "https://api.exchangerate-api.com/v4/latest/EUR",   # 返回 rates.USD
+        "https://open.er-api.com/v6/latest/EUR",            # 返回 rates.USD
+        "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json"  # 返回 eur.usd
+    ]
+    
+    for url in apis:
+        try:
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                # 尝试不同 API 的解析逻辑
+                if "rates" in data and "USD" in data["rates"]:
+                    rate = data["rates"]["USD"]
+                    return {"current_price": round(rate, 4), "error": None}
+                elif "usd" in data.get("eur", {}):
+                    rate = data["eur"]["usd"]
+                    return {"current_price": round(rate, 4), "error": None}
+                elif "rate" in data and "USD" in data["rate"]:
+                    # 兼容某些简化的返回格式
+                    rate = data["rate"]["USD"]
+                    return {"current_price": round(rate, 4), "error": None}
+            # 如果不成功，继续尝试下一个 API
+        except Exception as e:
+            continue
+    
+    return {"error": "所有 API 均失败，无法获取汇率"}
 
-# ========== 简单的支撑阻力（基于近期波动估算）==========
+# ========== 简单的支撑阻力（基于当前价格估算）==========
 def calculate_support_resistance(price: float) -> tuple:
-    """根据当前价格估算支撑阻力（简单方法）"""
-    # 使用 ATR 概念，假设每日波动 0.5% ~ 1%
+    """根据当前价格估算支撑阻力（使用 0.5% 波动范围）"""
     atr_est = price * 0.005
     support = round(price - atr_est, 4)
     resistance = round(price + atr_est, 4)
@@ -71,7 +81,7 @@ def generate_analysis(price: float, support: float, resistance: float) -> str:
 估算阻力位：{resistance}
 
 请根据以上数据，撰写一份简短的外汇日报，内容包括：
-1. 当前价格位置判断
+1. 当前价格位置判断（是否接近支撑/阻力）
 2. 短期可能方向（看涨/看跌/震荡）
 3. 关键支撑阻力的交易意义
 4. 核心风险提示（如央行政策、经济数据）
@@ -142,15 +152,18 @@ def main():
 """
     
     # 推送
-    webhook = os.environ.get("DINGTALK_WEBHOOK", "https://oapi.dingtalk.com/robot/send?access_token=06b76a64f6aedfad1f76478af6fe749fe43d33b1417d6b2cff10dad3b45b997a")
-    secret = os.environ.get("DINGTALK_SECRET", "报告")  # 钉钉加签密钥，如果没有加签可以留空
+    webhook = os.environ.get("DINGTALK_WEBHOOK", "")
+    secret = os.environ.get("DINGTALK_SECRET", "")
     if webhook and secret:
         if send_to_dingtalk(webhook, secret, report):
             print("钉钉推送成功")
         else:
             print("钉钉推送失败")
+    elif webhook:
+        # 如果没有签名密钥，可以尝试不带签名的推送（但钉钉会拒绝，除非机器人未开启加签）
+        print("未配置钉钉加签密钥，请检查机器人安全设置或添加 DINGTALK_SECRET")
     else:
-        print("未配置钉钉 Webhook 或 Secret，跳过推送")
+        print("未配置钉钉 Webhook，跳过推送")
 
 if __name__ == "__main__":
     main()

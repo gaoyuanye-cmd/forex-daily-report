@@ -1,0 +1,1 @@
+# forex-daily-report

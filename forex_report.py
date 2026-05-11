@@ -80,7 +80,7 @@ def generate_analysis(price: float, support: float, resistance: float) -> str:
 估算支撑位：{support}
 估算阻力位：{resistance}
 
-请根据以上数据，撰写一份简短的外汇日报，内容包括：
+请根据以上数据，撰写一份简短的外汇报告，内容包括：
 1. 当前价格位置判断（是否接近支撑/阻力）
 2. 短期可能方向（看涨/看跌/震荡）
 3. 关键支撑阻力的交易意义
@@ -151,7 +151,7 @@ def main():
     analysis = generate_analysis(price, support, resistance)
     
     today = datetime.now().strftime("%Y-%m-%d")
-    report = f"""# 📊 欧元/美元每日分析
+    report = f"""# 📊 欧元/美元每日分析报告
 
 **日期**：{today}
 **当前汇率**：{price}

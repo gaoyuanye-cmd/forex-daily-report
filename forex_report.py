@@ -117,7 +117,24 @@ def send_to_dingtalk(webhook_url: str, secret: str, content: str) -> bool:
     except Exception as e:
         print(f"钉钉发送异常：{e}")
         return False
-
+def send_to_dingtalk_no_sign(webhook_url: str, content: str) -> bool:
+    """无加签版本，用于关闭了加签的钉钉机器人"""
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "msgtype": "markdown",
+        "markdown": {"title": "📊 欧元/美元日报", "text": content[:4000]}
+    }
+    try:
+        resp = requests.post(webhook_url, json=payload, headers=headers, timeout=10)
+        result = resp.json()
+        if result.get("errcode") == 0:
+            return True
+        else:
+            print(f"钉钉返回错误：{result}")
+            return False
+    except Exception as e:
+        print(f"钉钉发送异常：{e}")
+        return False
 # ========== 主函数 ==========
 def main():
     print("获取欧元/美元汇率...")
@@ -152,16 +169,13 @@ def main():
 """
     
     # 推送
+       # 推送（无加签版本）
     webhook = os.environ.get("DINGTALK_WEBHOOK", "")
-    secret = os.environ.get("DINGTALK_SECRET", "")
-    if webhook and secret:
-        if send_to_dingtalk(webhook, secret, report):
+    if webhook:
+        if send_to_dingtalk_no_sign(webhook, report):
             print("钉钉推送成功")
         else:
             print("钉钉推送失败")
-    elif webhook:
-        # 如果没有签名密钥，可以尝试不带签名的推送（但钉钉会拒绝，除非机器人未开启加签）
-        print("未配置钉钉加签密钥，请检查机器人安全设置或添加 DINGTALK_SECRET")
     else:
         print("未配置钉钉 Webhook，跳过推送")
 

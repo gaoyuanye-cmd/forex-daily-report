@@ -211,9 +211,8 @@ import akshare as ak
 from typing import Dict, Any, Optional
 
 def fetch_cot_akshare() -> Dict[str, Any]:
-    """通过 AKShare 获取欧元期货 COT 非商业净持仓（改进版）"""
+    """通过 AKShare 获取欧元期货 COT 非商业净持仓（适配实际字段名）"""
     try:
-        # 1. 获取 CFTC 非商业外汇持仓数据
         cot_df = ak.macro_usa_cftc_nc_holding()
     except AttributeError:
         print("❌ AKShare 版本过低或接口不存在，请执行：pip install akshare --upgrade")
@@ -226,27 +225,28 @@ def fetch_cot_akshare() -> Dict[str, Any]:
         print("⚠️ AKShare COT 数据为空")
         return {}
 
-    # 2. 确保数据按日期升序排列
+    # 确保日期排序
     if '日期' in cot_df.columns:
         cot_df['日期'] = pd.to_datetime(cot_df['日期'])
         cot_df = cot_df.sort_values(by='日期', ascending=True).reset_index(drop=True)
     else:
-        # 备用：假设索引是日期
         cot_df.index = pd.to_datetime(cot_df.index)
         cot_df = cot_df.sort_index(ascending=True).reset_index(drop=True)
 
-    # 3. 安全匹配净持仓字段名（兼容不同版本）
-    net_col = None
-    for candidate in ['非商业净持仓', '净持仓', '非商业净多头']:
-        if candidate in cot_df.columns:
-            net_col = candidate
-            break
+    # 字段名映射（兼容不同版本）
+    net_candidates = ['欧元-净仓位', '非商业净持仓', '净持仓', '非商业净多头']
+    long_candidates = ['欧元-多头仓位', '非商业多头持仓']
+    short_candidates = ['欧元-空头仓位', '非商业空头持仓']
+
+    net_col = next((c for c in net_candidates if c in cot_df.columns), None)
+    long_col = next((c for c in long_candidates if c in cot_df.columns), None)
+    short_col = next((c for c in short_candidates if c in cot_df.columns), None)
 
     if net_col is None:
-        print(f"⚠️ 未找到非商业净持仓字段，可用字段: {list(cot_df.columns)}")
+        print(f"⚠️ 未找到欧元净持仓字段，可用字段: {list(cot_df.columns)}")
         return {}
 
-    # 4. 安全转换整数（处理 NaN、'——' 等）
+    # 安全转换整数
     def safe_int(val) -> Optional[int]:
         try:
             if pd.isna(val) or str(val).strip() in ['', '——', 'NaN', 'nan']:
@@ -255,33 +255,28 @@ def fetch_cot_akshare() -> Dict[str, Any]:
         except (ValueError, TypeError):
             return None
 
-    # 5. 取最近两期数据
     latest = cot_df.iloc[-1]
     prev = cot_df.iloc[-2] if len(cot_df) > 1 else latest
 
     net_now = safe_int(latest[net_col])
     if net_now is None:
-        print(f"⚠️ 最新一期净持仓数据无效: {latest[net_col]}")
+        print(f"⚠️ 最新一期欧元净持仓数据无效: {latest[net_col]}")
         return {}
 
-    # 6. 构建返回结果
     result = {
         "net_noncommercial": net_now,
         "date": str(latest['日期'])[:10] if '日期' in latest else str(latest.name)[:10],
     }
 
-    # 周变动（仅当上一期有效时计算）
     net_prev = safe_int(prev[net_col])
     result["weekly_change"] = net_now - net_prev if net_prev is not None else None
 
-    # 可选多空字段
-    if "非商业多头持仓" in cot_df.columns:
-        result["long"] = safe_int(latest["非商业多头持仓"])
-    if "非商业空头持仓" in cot_df.columns:
-        result["short"] = safe_int(latest["非商业空头持仓"])
+    if long_col:
+        result["long"] = safe_int(latest[long_col])
+    if short_col:
+        result["short"] = safe_int(latest[short_col])
 
     return result
-
 
 # ================== IG 散户情绪（公开页面抓取） ==================
 def fetch_ig_sentiment() -> Dict[str, Optional[float]]:

@@ -2,7 +2,7 @@ name: Forex Daily Report
 
 on:
   schedule:
-    # 工作日每天上午8点运行（UTC时间），可根据需要调整
+    # 工作日每天上午8点（UTC时间）运行，即北京时间下午4点
     - cron: '0 8 * * 1-5'
   workflow_dispatch:    # 允许手动触发
 
@@ -21,7 +21,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install akshare pandas
+          pip install akshare pandas yfinance
 
       - name: Run forex report
         run: python forex_report.py

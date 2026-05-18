@@ -12,8 +12,8 @@ import json
 import hmac
 import hashlib
 import base64
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, Tuple, List
+from datetime import datetime
+from typing import Dict, Any, Optional
 
 import requests
 import numpy as np
@@ -55,7 +55,7 @@ def fetch_historical(ticker: str, period: str = "3mo", interval: str = "1d") -> 
         return pd.DataFrame()
 
 def get_related_prices() -> Dict[str, Optional[float]]:
-    """获取相关品种最新收盘价"""
+    """获取相关品种最新收盘价（修正索引错误）"""
     tickers = {
         "DXY": DXY_TICKER,
         "EURGBP": EURGBP_TICKER,
@@ -69,7 +69,8 @@ def get_related_prices() -> Dict[str, Optional[float]]:
         try:
             df = yf.download(ticker, period="5d", interval="1d", progress=False)
             if not df.empty:
-                price = float(df["Close"].iloc[-1].iloc[0])
+                # 修正：直接取 Close 列的最后一个值
+                price = float(df["Close"].iloc[-1])
                 results[name] = round(price, 4)
             else:
                 results[name] = None
@@ -206,10 +207,6 @@ def generate_signals(df: pd.DataFrame) -> Dict[str, Any]:
 
 
 # ================== COT 机构持仓数据（AKShare） ==================
-import pandas as pd
-import akshare as ak
-from typing import Dict, Any, Optional
-
 def fetch_cot_akshare() -> Dict[str, Any]:
     """通过 AKShare 获取欧元期货 COT 非商业净持仓（适配实际字段名）"""
     try:
@@ -278,24 +275,12 @@ def fetch_cot_akshare() -> Dict[str, Any]:
 
     return result
 
+
 # ================== IG 散户情绪（公开页面抓取） ==================
 def fetch_ig_sentiment() -> Dict[str, Optional[float]]:
     """抓取IG官网EUR/USD散户多空比例（可能因页面结构改变而失效）"""
-    result = {"long_pct": None, "short_pct": None}
-    try:
-        url = "https://www.ig.com/en/forex/markets-forex/eur-usd"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code != 200:
-            return result
-        # 简单文本搜索（实际使用时可能需要更健壮的解析）
-        if "sentiment" in resp.text.lower():
-            # 示例提取逻辑（具体需根据实际DOM编写，此处仅做示意）
-            # 您可以在此补充HTML解析代码
-            pass
-    except Exception as e:
-        pass
-    return result
+    # 保留接口，暂不实现具体解析
+    return {"long_pct": None, "short_pct": None}
 
 
 # ================== AI 分析生成 ==================
@@ -418,6 +403,21 @@ def main():
     print("🤖 调用 DeepSeek 生成策略分析...")
     ai_report = generate_ai_analysis(signals, related, cot_data)
 
+    # 安全处理 COT 数据解读
+    net_val = cot_data.get('net_noncommercial')
+    if net_val is not None and net_val > 0:
+        net_side = "机构净多头"
+    else:
+        net_side = "机构净空头"
+
+    weekly_change_val = cot_data.get('weekly_change')
+    if weekly_change_val is not None and weekly_change_val > 0:
+        change_desc = "增加"
+    elif weekly_change_val is not None and weekly_change_val < 0:
+        change_desc = "减少"
+    else:
+        change_desc = "变化不大或无数据"
+
     # 组装最终报告
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     price = signals.get("price", "N/A")
@@ -435,7 +435,7 @@ def main():
 ## 🏦 机构持仓 (COT)
 - 非商业净持仓：{cot_data.get('net_noncommercial','N/A')} 手
 - 周变动：{cot_data.get('weekly_change','N/A')} 手
-- 解读：{'机构净多头' if cot_data.get('net_noncommercial',0)>0 else '机构净空头'}  {'增加' if cot_data.get('weekly_change',0)>0 else '减少'}仓位
+- 解读：{net_side}，{change_desc}仓位
 
 ---
 

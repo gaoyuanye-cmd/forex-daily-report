@@ -2,9 +2,9 @@ name: Forex Daily Report
 
 on:
   schedule:
-    # 工作日每天上午8点（UTC时间）运行，即北京时间下午4点
-    - cron: '0 8 * * 1-5'
-  workflow_dispatch:    # 允许手动触发
+    # 每天北京时间 09:00 运行（UTC 01:00）
+    - cron: '0 1 * * *'
+  workflow_dispatch:    # 保留手动触发
 
 jobs:
   generate-report:
@@ -23,5 +23,16 @@ jobs:
         run: |
           pip install akshare pandas yfinance
 
+      - name: Verify secrets availability (debug)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+        run: |
+          if [ -n "$DEEPSEEK_API_KEY" ]; then echo "✓ DEEPSEEK_API_KEY is set"; else echo "⚠️ DEEPSEEK_API_KEY is NOT set"; fi
+          if [ -n "$DINGTALK_WEBHOOK" ]; then echo "✓ DINGTALK_WEBHOOK is set"; else echo "⚠️ DINGTALK_WEBHOOK is NOT set"; fi
+
       - name: Run forex report
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
         run: python forex_report.py
